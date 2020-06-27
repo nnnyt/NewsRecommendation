@@ -66,8 +66,8 @@ class NRMS(nn.Module):
         return self.news_encoder(title)
     
     def get_user_r(self, browsed_news_r):
-        return self.user_encoder(browsed_news_r)
+        return self.user_encoder(browsed_news_r.to(device))
     
     def test(self, user_r, candidate_news_r):
-        return torch.bmm(user_r.unsqueeze(dim=1), candidate_news_r.unsqueeze(dim=2)).flatten()
+        return torch.bmm(user_r.to(device).unsqueeze(dim=1), candidate_news_r.to(device).unsqueeze(dim=2)).flatten()
 

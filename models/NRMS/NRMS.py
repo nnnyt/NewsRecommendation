@@ -129,20 +129,22 @@ if __name__ == "__main__":
 
     pretrained_embedding = torch.from_numpy(get_embedding_matrix(word_index)).float()
     dataset = MyDataset(all_browsed_title, all_candidate_title, all_label)
-    train_data = DataLoader(dataset=dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
+    train_data = DataLoader(dataset=dataset, batch_size=config.batch_size, shuffle=True, num_workers=config.num_workers)
     model = NRMS(config, pretrained_embedding).to(device)
     # print(model)
     train(train_data)
+    print('saving model to model.pkl...')
+    torch.save(model.state_dict(), 'model.pkl')
 
     model.eval()
     news_dataset = NewsDataset(news_title_test)
-    news_dataloader = DataLoader(news_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
+    news_dataloader = DataLoader(news_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.num_workers)
     print('get news representations...')
     news_r_test = []
     with torch.no_grad():
         for i, news_data in enumerate(news_dataloader):
             news_r = model.get_news_r(news_data)
-            news_r = news_r.numpy()
+            news_r = news_r.cpu().numpy()
             if i == 0:
                 news_r_test = news_r
             else:
@@ -151,13 +153,13 @@ if __name__ == "__main__":
     impression_index, user_index, user_browsed_title_test, all_user_test, all_candidate_title_test, \
         all_label_test = get_test_input(news_index_test, news_r_test)
     user_dataset = UserDataset(user_browsed_title_test)
-    user_dataloader = DataLoader(user_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
+    user_dataloader = DataLoader(user_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.num_workers)
     print('get user representations...')
     user_r_test = []
     with torch.no_grad():
         for i, user_data in enumerate(user_dataloader):
             user_r = model.get_user_r(user_data)
-            user_r = user_r.numpy()
+            user_r = user_r.cpu().numpy()
             if i == 0:
                 user_r_test = user_r
             else:
@@ -166,14 +168,14 @@ if __name__ == "__main__":
     for i, user in enumerate(all_user_test):
         all_user_r_test[i] = user_r_test[user_index[user]]
     test_dataset = TestDataset(all_user_r_test, all_candidate_title_test)
-    test_dataloader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.num_workers)
     print('test...')
     pred_label = []
     with torch.no_grad():
         for i, test_data in enumerate(test_dataloader):
             user, candidate = test_data
             pred = model.test(user, candidate)
-            pred = pred.numpy()
+            pred = pred.cpu().numpy()
             if i == 0:
                 pred_label = pred
             else:
