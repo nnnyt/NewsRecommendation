@@ -2,3 +2,5 @@
 __pycache__/
 .vscode
 data/
+embedding_matrix.json
+news/

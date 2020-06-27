@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from SelfAttention import SelfAttention
 from attention import Attention
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class NewsEncoder(nn.Module):
     def __init__(self, config, pretrained_embedding=None):
@@ -18,7 +19,7 @@ class NewsEncoder(nn.Module):
     
     def forward(self, title):
         # batch_size, title_len, embedding_dim
-        title_embedded = F.dropout(self.word_embedding(title), p=self.config.dropout)
+        title_embedded = F.dropout(self.word_embedding(title.to(device)), p=self.config.dropout)
         # batch_size, title_len, embedding_dim
         title_selfatt = F.dropout(self.multi_head_self_attention(title_embedded), p=self.config.dropout)
         # batch_size, embedding_dim
@@ -68,5 +69,5 @@ class NRMS(nn.Module):
         return self.user_encoder(browsed_news_r)
     
     def test(self, user_r, candidate_news_r):
-        return torch.dot(user_r, candidate_news_r)
+        return torch.bmm(user_r.unsqueeze(dim=1), candidate_news_r.unsqueeze(dim=2)).flatten()
 
