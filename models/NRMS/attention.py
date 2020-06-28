@@ -15,8 +15,7 @@ class Attention(nn.Module):
         # x: batch_size, x_size, x_dim
         temp = torch.tanh(self.linear(x))
         # batch_size, x_size
-        att_weights = F.softmax(torch.matmul(
-            temp, self.q),dim=1)
+        att_weights = F.softmax(torch.matmul(temp, self.q),dim=1)
         # batch_size, x_dim
         output = torch.bmm(att_weights.unsqueeze(dim=1),
                            x).squeeze(dim=1)

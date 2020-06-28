@@ -13,6 +13,7 @@ import torch.nn.functional as F
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
+
 def mrr_score(y_true, y_score):
     order = np.argsort(y_score)[::-1]
     y_true = np.take(y_true, order)
@@ -101,41 +102,30 @@ def get_embedding_matrix(word_index):
     return embedding_matrix
 
 
-def train(train_iter):
+def train(model, train_iter):
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     for epoch in range(config.epochs):
         print('Epoch [{}/{}]'.format(epoch + 1, config.epochs))
+        loss_epoch = []
+        model.train()
         for i, data in enumerate(train_iter):
-            browsed, candidate, labels, true_labels = data
-            # print(browsed.size(), candidate.size(), labels.size(), true_labels.size())
+            browsed, candidate, labels= data
             optimizer.zero_grad()
             output = model(browsed, candidate)
             loss = torch.stack([x[0] for x in - F.log_softmax(output, dim=1)]).mean()
+            loss_epoch.append(loss.item())
             loss.backward()
             optimizer.step()
-            if i % 50 == 0:
-                msg = 'Iter: {0:>6},  Train Loss: {1:>5.2}'
-                print(msg.format(i+1, loss.item()))
+            if i % 1000 == 0:
+                msg = 'Iter: {0:>6},  Train Loss: {1:>5.2},  Average Loss: {2:>5.2}'
+                print(msg.format(i+1, loss.item(), np.mean(loss_epoch)))
+        print('saving model to model_%s.pkl...' % format(epoch))
+        torch.save(model.state_dict(), 'model_%s.pkl' % format(epoch))
+        test(model, news_title_test, news_index_test)
 
 
-if __name__ == "__main__":
-    news_index = np.load('news/news_index.npy', allow_pickle=True).item()
-    news_index_test = np.load('news/news_index_test.npy', allow_pickle=True).item()
-    word_index = np.load('news/word_index.npy', allow_pickle=True).item()
-    news_title = np.load('news/news_title.npy', allow_pickle=True)
-    news_title_test = np.load('news/news_title_test.npy', allow_pickle=True)
-    all_browsed_title, all_candidate_title, all_label = get_train_input(news_index, news_title)
-
-    pretrained_embedding = torch.from_numpy(get_embedding_matrix(word_index)).float()
-    dataset = MyDataset(all_browsed_title, all_candidate_title, all_label)
-    train_data = DataLoader(dataset=dataset, batch_size=config.batch_size, shuffle=True, num_workers=config.num_workers)
-    model = NRMS(config, pretrained_embedding).to(device)
-    # print(model)
-    train(train_data)
-    print('saving model to model.pkl...')
-    torch.save(model.state_dict(), 'model.pkl')
-
+def test(model, news_title_test, news_index_test):
     model.eval()
     news_dataset = NewsDataset(news_title_test)
     news_dataloader = DataLoader(news_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.num_workers)
@@ -188,3 +178,19 @@ if __name__ == "__main__":
     print('mrr: ', mrr)
     print('ndcg5: ', ndcg5)
     print('ndcg10: ', ndcg10)
+
+
+if __name__ == "__main__":
+    news_index = np.load('news/news_index.npy', allow_pickle=True).item()
+    news_index_test = np.load('news/news_index_test.npy', allow_pickle=True).item()
+    word_index = np.load('news/word_index.npy', allow_pickle=True).item()
+    news_title = np.load('news/news_title.npy', allow_pickle=True)
+    news_title_test = np.load('news/news_title_test.npy', allow_pickle=True)
+    all_browsed_title, all_candidate_title, all_label = get_train_input(news_index, news_title)
+
+    pretrained_embedding = torch.from_numpy(get_embedding_matrix(word_index)).float()
+    dataset = MyDataset(all_browsed_title, all_candidate_title, all_label)
+    train_data = DataLoader(dataset=dataset, batch_size=config.batch_size, shuffle=True, num_workers=config.num_workers)
+    model = NRMS(config, pretrained_embedding).to(device)
+    # print(model)
+    train(model, train_data)

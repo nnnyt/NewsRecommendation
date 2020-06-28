@@ -10,10 +10,11 @@ class MyDataset(Dataset):
         self.len = all_browsed_title.shape[0]
         
     def __getitem__(self, index):
-        return self.all_browsed_title[index], self.all_candidate_title[index], 0, self.all_label[index]
+        return self.all_browsed_title[index], self.all_candidate_title[index], self.all_label[index]
     
     def __len__(self):
         return self.len
+
 
 class NewsDataset(Dataset):
     def __init__(self, news_title_test):
@@ -26,6 +27,7 @@ class NewsDataset(Dataset):
     def __len__(self):
         return self.len
 
+
 class UserDataset(Dataset):
     def __init__(self, user_browsed_title_test):
         self.user_browsed_title_test = torch.from_numpy(user_browsed_title_test)
@@ -36,6 +38,7 @@ class UserDataset(Dataset):
     
     def __len__(self):
         return self.len
+
 
 class TestDataset(Dataset):
     def __init__(self, all_user_r_test, all_candidate_title_test):

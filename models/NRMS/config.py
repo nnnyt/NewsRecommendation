@@ -9,6 +9,6 @@ class config():
     attention_dim = 200
     dropout = 0.2
     learning_rate = 0.0001
-    epochs = 1
+    epochs = 5
     batch_size = 64
     num_workers = 8
