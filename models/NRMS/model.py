@@ -51,10 +51,14 @@ class NRMS(nn.Module):
         self.user_encoder = UserEncoder(config)
     
     def forward(self, browsed_news, candidate_news):
+        # browsed_num, batch_size, title_len
+        browsed_news = browsed_news.transpose(0,1)
+        # 1+K, batch_size, title_len
+        candidate_news = candidate_news.transpose(0,1)
         # 1+K, batch_size, embedding_dim
-        candidate_news_r = torch.stack([self.news_encoder(x) for x in candidate_news], dim=1)
+        candidate_news_r = torch.stack([self.news_encoder(x) for x in candidate_news])
         # batch_size, browsed_num, embedding_dim
-        browsed_news_r = torch.stack([self.news_encoder(x) for x in browsed_news])
+        browsed_news_r = torch.stack([self.news_encoder(x) for x in browsed_news], dim=1)
         # batch_size, embedding_dim
         user_r = self.user_encoder(browsed_news_r)
         # batch_size, 1+K
