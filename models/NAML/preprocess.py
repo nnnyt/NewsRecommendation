@@ -4,6 +4,7 @@ import os
 import random
 from config import Config
 
+
 def preprocess_user_data(filename):
     print("Preprocessing user data...")
     browsed_news = []

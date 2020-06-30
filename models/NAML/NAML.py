@@ -130,7 +130,7 @@ def get_embedding_matrix(word_index):
     return embedding_matrix
 
 
-def train(model, train_iter):
+def train(model, train_iter, all_news_test, news_index_test):
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=Config.learning_rate)
     for epoch in range(Config.epochs):
@@ -145,11 +145,66 @@ def train(model, train_iter):
             loss_epoch.append(loss.item())
             loss.backward()
             optimizer.step()
-            if i % 10 == 0:
+            if i % 1000 == 0:
                 msg = 'Iter: {0:>6},  Train Loss: {1:>5.2},  Average Loss: {2:>5.2}'
                 print(msg.format(i+1, loss.item(), np.mean(loss_epoch)))
-        # print('saving model to model_%s.pkl...' % format(epoch))
-        # torch.save(model.state_dict(), 'model_%s.pkl' % format(epoch))
+        print('saving model to model_%s.pkl...' % format(epoch))
+        torch.save(model.state_dict(), 'model_%s.pkl' % format(epoch))
+        test(model, all_news_test, news_index_test)
+
+
+def test(model, all_news_test, news_index_test):
+    model.eval()
+    news_dataset = NewsDataset(all_news_test)
+    news_dataloader = DataLoader(news_dataset, batch_size=Config.batch_size, shuffle=False, num_workers=Config.num_workers)
+    print('get news representations...')
+    news_r_test = []
+    with torch.no_grad():
+        for i, news_data in enumerate(news_dataloader):
+            news_r = model.get_news_r(news_data)
+            news_r = news_r.cpu().numpy()
+            if i == 0:
+                news_r_test = news_r
+            else:
+                news_r_test = np.concatenate((news_r_test, news_r), axis=0)
+
+    user_browsed_news_test, all_candidate_news_test, all_label_test, impression_index, user_index, \
+                all_user_test = get_test_input(news_r_test, news_index_test)
+    user_dataset = UserDataset(user_browsed_news_test)
+    user_dataloader = DataLoader(user_dataset, batch_size=Config.batch_size, shuffle=False, num_workers=Config.num_workers)
+    print('get user representations...')
+    user_r_test = []
+    with torch.no_grad():
+        for i, user_data in enumerate(user_dataloader):
+            user_r = model.get_user_r(user_data)
+            user_r = user_r.cpu().numpy()
+            if i == 0:
+                user_r_test = user_r
+            else:
+                user_r_test = np.concatenate((user_r_test, user_r), axis=0)
+    all_user_r_test = np.zeros((len(all_user_test), Config.num_filters), dtype='float32')
+    for i, user in enumerate(all_user_test):
+        all_user_r_test[i] = user_r_test[user_index[user]]
+    test_dataset = TestDataset(all_user_r_test, all_candidate_news_test)
+    test_dataloader = DataLoader(test_dataset, batch_size=Config.batch_size, shuffle=False, num_workers=Config.num_workers)
+    print('test...')
+    pred_label = []
+    with torch.no_grad():
+        for i, test_data in enumerate(test_dataloader):
+            user, candidate = test_data
+            pred = model.test(user, candidate)
+            pred = pred.cpu().numpy()
+            if i == 0:
+                pred_label = pred
+            else:
+                pred_label = np.concatenate((pred_label, pred), axis=0)
+    pred_label = np.array(pred_label).reshape(-1)
+    all_label_test = np.array(all_label_test).reshape(-1)
+    auc, mrr, ndcg5, ndcg10 = evaluate(impression_index, all_label_test, pred_label)
+    print('auc: ', auc)
+    print('mrr: ', mrr)
+    print('ndcg5: ', ndcg5)
+    print('ndcg10: ', ndcg10)
 
 
 if __name__ == "__main__":
@@ -172,5 +227,5 @@ if __name__ == "__main__":
     train_data = DataLoader(dataset=dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
     model = NAML(Config, pretrained_embedding).to(device)
     # print(model)
-    train(model, train_data)
+    train(model, train_data, all_news_test, news_index_test)
 

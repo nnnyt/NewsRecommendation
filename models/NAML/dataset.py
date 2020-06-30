@@ -17,24 +17,24 @@ class MyDataset(Dataset):
 
 
 class NewsDataset(Dataset):
-    def __init__(self, news_title_test):
-        self.news_title_test = torch.from_numpy(news_title_test).long()
-        self.len = news_title_test.shape[0]
+    def __init__(self, all_news_test):
+        self.all_news_test = torch.from_numpy(all_news_test).long()
+        self.len = all_news_test.shape[0]
     
     def __getitem__(self, index):
-        return self.news_title_test[index]
+        return self.all_news_test[index]
     
     def __len__(self):
         return self.len
 
 
 class UserDataset(Dataset):
-    def __init__(self, user_browsed_title_test):
-        self.user_browsed_title_test = torch.from_numpy(user_browsed_title_test)
-        self.len = user_browsed_title_test.shape[0]
+    def __init__(self, user_browsed_test):
+        self.user_browsed_test = torch.from_numpy(user_browsed_test)
+        self.len = user_browsed_test.shape[0]
     
     def __getitem__(self, index):
-        return self.user_browsed_title_test[index]
+        return self.user_browsed_test[index]
     
     def __len__(self):
         return self.len
