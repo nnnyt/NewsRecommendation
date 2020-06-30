@@ -1,5 +1,5 @@
 class Config():
-    model_name = 'NRMS'
+    model_name = 'NAML'
     max_title_len = 30
     max_abstract_len = 100
     embedding_dim = 300
