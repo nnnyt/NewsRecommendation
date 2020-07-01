@@ -3,7 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from attention import Attention
 
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 class NewsEncoder(nn.Module):
     def __init__(self, config, pretrained_embedding=None):
@@ -67,10 +69,10 @@ class TANR(nn.Module):
         click_prob = torch.stack([torch.bmm(user_r.unsqueeze(dim=1), x.unsqueeze(dim=2)).flatten()
                     for x in candidate_news_r], dim=1)
         # batch_size, 1+K+browsed_num, num_filters
-        all_news_r = torch.cat((candidate_news_r.transpose(0,1), browsed_news_r), dim=1)
+        # all_news_r = torch.cat((candidate_news_r.transpose(0,1), browsed_news_r), dim=1)
         # batch_size, 1+K+browsed_num, category_num
-        category_pred = self.category_dense(all_news_r)
-        return click_prob, category_pred
+        # category_pred = self.category_dense(all_news_r)
+        return click_prob
     
     def get_news_r(self, title):
         return self.news_encoder(title)
@@ -81,3 +83,15 @@ class TANR(nn.Module):
     def test(self, user_r, candidate_news_r):
         return torch.bmm(user_r.to(device).unsqueeze(dim=1), candidate_news_r.to(device).unsqueeze(dim=2)).flatten()
 
+
+class Classifier(nn.Module):
+    def __init__(self, config, pretrained_embedding=None):
+        super(Classifier, self).__init__()
+        self.config = config
+        self.pretrained_embedding = pretrained_embedding
+        self.news_encoder = NewsEncoder(config, pretrained_embedding)
+        self.dense = nn.Linear(config.num_filters, config.category_num)
+    
+    def forward(self, news):
+        news_r = self.news_encoder(news)
+        return self.dense(news_r)

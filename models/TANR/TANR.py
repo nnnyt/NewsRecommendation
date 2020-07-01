@@ -1,12 +1,12 @@
 import numpy as np
 from preprocess import preprocess_user_data, preprocess_test_user_data
-from model import TANR
+from model import TANR, Classifier
 from config import Config
 import json
 import os
 import torch
 from torch.utils.data import Dataset, DataLoader, TensorDataset
-from dataset import MyDataset, NewsDataset, UserDataset, TestDataset
+from dataset import MyDataset, NewsDataset, UserDataset, TestDataset, NewsCategoryDataset
 import torch.nn.functional as F
 
 
@@ -57,7 +57,7 @@ def evaluate(impression_index, all_label_test, pred_label):
     return np.mean(all_auc), np.mean(all_mrr), np.mean(all_ndcg5), np.mean(all_ndcg10)
 
 
-def get_train_input(news_index, news_title):
+def get_train_input(news_index, news_title, news_category):
     all_browsed_news, all_click, all_unclick, all_candidate, all_label = preprocess_user_data('../../data/MINDsmall_train/behaviors.tsv')
     print('preprocessing trainning input...')
     all_browsed_title = np.zeros((len(all_browsed_news), Config.max_browsed, Config.max_title_len), dtype='int32')
@@ -118,21 +118,16 @@ def train(model, train_iter):
         for i, data in enumerate(train_iter):
             browsed, candidate, labels, category = data
             optimizer.zero_grad()
-            output, category_pred = model(browsed, candidate)
-            loss_click = torch.stack([x[0] for x in - F.log_softmax(output, dim=1)]).mean()
-            criteria = torch.nn.CrossEntropyLoss()
-            category_pred = category_pred.view(-1, Config.category_num)
-            category = category.to(device).view(-1, 1).flatten()
-            category_loss = criteria(category_pred, category)
-            loss = loss_click + Config.category_loss_weight * category_loss
+            output = model(browsed, candidate)
+            loss = torch.stack([x[0] for x in - F.log_softmax(output, dim=1)]).mean()
             loss_epoch.append(loss.item())
             loss.backward()
             optimizer.step()
             if i % 1000 == 0:
                 msg = 'Iter: {0:>6},  Train Loss: {1:>5.2},  Average Loss: {2:>5.2}'
                 print(msg.format(i+1, loss.item(), np.mean(loss_epoch)))
-        print('saving model to model_%s.pkl...' % format(epoch))
-        torch.save(model.state_dict(), 'model_%s.pkl' % format(epoch))
+        print('saving model to model2_%s.pkl...' % format(epoch))
+        torch.save(model.state_dict(), 'model2_%s.pkl' % format(epoch))
         test(model, news_title_test, news_index_test)
 
 
@@ -191,6 +186,29 @@ def test(model, news_title_test, news_index_test):
     print('ndcg10: ', ndcg10)
 
 
+def pretrain(model, train_iter):
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=Config.learning_rate)
+    for epoch in range(Config.epochs):
+        print('Epoch [{}/{}]'.format(epoch + 1, Config.epochs))
+        loss_epoch = []
+        model.train()
+        for i, data in enumerate(train_iter):
+            title, category = data
+            optimizer.zero_grad()
+            output = model(title)
+            category = category.to(device).flatten()
+            criteria = torch.nn.CrossEntropyLoss()
+            loss = criteria(output, category)
+            loss_epoch.append(loss.item())
+            loss.backward()
+            optimizer.step()
+            if i % 500 == 0:
+                msg = 'Iter: {0:>6},  Train Loss: {1:>5.2},  Average Loss: {2:>5.2}'
+                print(msg.format(i+1, loss.item(), np.mean(loss_epoch)))
+    return model.state_dict()
+
+
 if __name__ == "__main__":
     news_index = np.load('news/news_index.npy', allow_pickle=True).item()
     news_index_test = np.load('news/news_index_test.npy', allow_pickle=True).item()
@@ -198,11 +216,22 @@ if __name__ == "__main__":
     news_title = np.load('news/news_title.npy', allow_pickle=True)
     news_title_test = np.load('news/news_title_test.npy', allow_pickle=True)
     news_category = np.load('news/news_category.npy', allow_pickle=True)
-    all_browsed_title, all_candidate_title, all_label, all_topic_label = get_train_input(news_index, news_title)
 
     pretrained_embedding = torch.from_numpy(get_embedding_matrix(word_index)).float()
+    pre_dataset = NewsCategoryDataset(news_title, news_category)
+    pretrain_data = DataLoader(dataset=pre_dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
+    classifier_model = Classifier(Config, pretrained_embedding).to(device)
+    pretrain_state = pretrain(classifier_model, pretrain_data)
+
+    all_browsed_title, all_candidate_title, all_label, all_topic_label = get_train_input(news_index, news_title, news_category)
+
     dataset = MyDataset(all_browsed_title, all_candidate_title, all_label, all_topic_label)
     train_data = DataLoader(dataset=dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
     model = TANR(Config, pretrained_embedding).to(device)
-    # print(model)
+    model_state = model.state_dict()
+    for i in model_state:
+        if i in pretrain_state:
+            model_state[i] = pretrain_state[i]
+    model.load_state_dict(model_state)
+
     train(model, train_data)

@@ -30,6 +30,19 @@ class NewsDataset(Dataset):
         return self.len
 
 
+class NewsCategoryDataset(Dataset):
+    def __init__(self, news_title, news_category):
+        self.news_title = torch.from_numpy(news_title).long()
+        self.news_category = torch.from_numpy(news_category).long()
+        self.len = news_title.shape[0]
+    
+    def __getitem__(self, index):
+        return self.news_title[index], self.news_category[index]
+    
+    def __len__(self):
+        return self.len
+
+
 class UserDataset(Dataset):
     def __init__(self, user_browsed_title_test):
         self.user_browsed_title_test = torch.from_numpy(user_browsed_title_test)
