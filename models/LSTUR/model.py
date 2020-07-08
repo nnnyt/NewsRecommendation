@@ -60,11 +60,13 @@ class UserEncoder(nn.Module):
         assert (config.num_filters + config.category_embedding_dim * 2) / 2 % 1 == 0
         self.user_dim = config.num_filters + config.category_embedding_dim * 2
         if config.model_type == 'ini':
+            weight = torch.zeros(config.user_num, self.user_dim)
             self.gru = nn.GRU(self.user_dim, self.user_dim, batch_first=True)
             self.user_embedding = nn.Embedding(config.user_num, self.user_dim, padding_idx=0)
         else:
+            weight = torch.zeros(config.user_num, int(self.user_dim / 2))
             self.gru = nn.GRU(self.user_dim, int(self.user_dim / 2), batch_first=True)
-            self.user_embedding = nn.Embedding(config.user_num, int(self.user_dim / 2), padding_idx=0)
+            self.user_embedding = nn.Embedding(config.user_num, int(self.user_dim / 2), _weight=weight)
     
     def forward(self, news, user, browsed_len):
         # batch_size, user_dim or user_dim/2
