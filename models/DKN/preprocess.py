@@ -13,16 +13,17 @@ def preprocess_user_data(filename):
         data = f.readlines()
     random.seed(212)
     random.shuffle(data)
-    use_num = int(len(data) * 0.0001)
+    use_num = int(len(data) * 1)
     use_data = data[:use_num]
-    all_browsed_news = []
-    all_candidate = []
-    all_label = []
     for l in use_data:
         userID, time, history, impressions = l.strip('\n').split('\t')
         history = history.split()
         browsed_news.append(history)
         impressions = [x.split('-') for x in impressions.split()]
+        impression_news.append(impressions)
+    impression_pos = []
+    impression_neg = []
+    for impressions in impression_news:
         pos = []
         neg = []
         for news in impressions:
@@ -30,29 +31,28 @@ def preprocess_user_data(filename):
                 pos.append(news[0])
             else:
                 neg.append(news[0])
-        num = len(pos)
-        try:
-            neg = random.sample(neg, num)
-        except:
-            neg = neg
-        for news in pos:
-            all_browsed_news.append(history)
-            all_candidate.append([news])
-            all_label.append([1])
-        for news in neg:
-            all_browsed_news.append(history)
-            all_candidate.append([news])
-            all_label.append([0])
-
-    random.seed(212)
-    random.shuffle(all_browsed_news)
-    random.seed(212)
-    random.shuffle(all_candidate)
-    random.seed(212)
-    random.shuffle(all_label)            
+        impression_pos.append(pos)
+        impression_neg.append(neg)
+    all_browsed_news = []
+    all_click = []
+    all_unclick = []
+    all_candidate = []
+    all_label = []
+    for k in range(len(browsed_news)):
+        browsed = browsed_news[k]
+        pos = impression_pos[k]
+        neg = impression_neg[k]
+        for pos_news in pos:
+            all_browsed_news.append(browsed)
+            all_click.append([pos_news])
+            neg_news = random.sample(neg, Config.neg_sample)
+            all_unclick.append(neg_news)
+            all_candidate.append([pos_news]+neg_news)
+            all_label.append([1] + [0] * Config.neg_sample)
+            
     print('original behavior: ', len(browsed_news))
     print('processed behavior: ', len(all_browsed_news))
-    return all_browsed_news, all_candidate, all_label
+    return all_browsed_news, all_click, all_unclick, all_candidate, all_label
 
 
 def preprocess_test_user_data(filename):
@@ -61,7 +61,7 @@ def preprocess_test_user_data(filename):
         data = f.readlines()
     random.seed(212)
     random.shuffle(data)
-    use_num = int(len(data) * 0.0001)
+    use_num = int(len(data) * 0.1)
     use_data = data[:use_num]
     impression_index = []
     all_browsed_test = []

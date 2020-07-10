@@ -1,9 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from attention import Attention
 
 
 device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+
 
 class KCNN(nn.Module):
     def __init__(self, config, pretrained_embedding=None, pretrained_entity_embedding=None):
@@ -19,7 +21,8 @@ class KCNN(nn.Module):
             self.entity_embedding = nn.Embedding.from_pretrained(pretrained_entity_embedding,freeze=False)
         self.transform = nn.Linear(config.entity_embedding_dim, config.embedding_dim)
         self.conv = nn.ModuleList([nn.Conv2d(2, config.num_filters, (k, config.embedding_dim)) for k in config.window_size])
-    
+        self.att = Attention(config.attention_dim, config.num_filters)
+
     def forward(self, news):
         title = news[:, :self.config.max_title_len].to(device)
         entity = news[:, self.config.max_title_len : ].to(device)
@@ -36,7 +39,8 @@ class KCNN(nn.Module):
             # batch_size, num_filters, title_len - window_size + 1
             cnn = F.relu(conv(embedding).squeeze(dim=3))
             # batch_size, num_filters
-            cnn_pooled = F.max_pool1d(cnn, cnn.size(2)).squeeze(dim=2)
+            # cnn_pooled = F.max_pool1d(cnn, cnn.size(2)).squeeze(dim=2)
+            cnn_pooled = self.att(cnn.transpose(1, 2))
             pooled.append(cnn_pooled)
         # batch_size, num_filters * len(window_size)
         new_r = torch.cat(pooled, dim=1)
@@ -75,14 +79,22 @@ class DKN(nn.Module):
     def forward(self, browsed_news, candidate_news):
         # browsed_num, batch_size, title_len * 2
         browsed_news = browsed_news.transpose(0, 1)
+        # 1+K, batch_size, title_len+abstract_len+2
+        candidate_news = candidate_news.transpose(0, 1)
         # batch_size, browsed_num, num_filters * len(window_size)
         browsed_news_r = torch.stack([self.kcnn(x) for x in browsed_news], dim=1)
-        # batch_size, num_filters * len(window_size)
-        candidate_news_r = self.kcnn(candidate_news)
-        # batch_size, num_filters * len(window_size)
-        user_r = self.user_encoder(browsed_news_r, candidate_news_r)
+        # 1+K, batch_size, num_filters * len(window_size)
+        candidate_news_r = torch.stack([self.kcnn(x) for x in candidate_news])
+        # 1+K, batch_size, num_filters * len(window_size)
+        user_r = torch.stack([self.user_encoder(browsed_news_r, x) for x in candidate_news_r])
         # batch_size, 1
-        click_prob = torch.bmm(user_r.unsqueeze(dim=1), candidate_news_r.unsqueeze(dim=2)).flatten()
+        # click_prob = torch.bmm(user_r.unsqueeze(dim=1), candidate_news_r.unsqueeze(dim=2)).flatten()
+        # use nagetive sampling
+        # batch_size, 1+K
+        click_prob = torch.stack([
+            torch.bmm(x.unsqueeze(dim=1), y.unsqueeze(dim=2)).flatten() for (x, y) in zip(user_r, candidate_news_r)
+        ], dim=1)
+        # print(click_prob.size())
         return click_prob
     
     def get_news_r(self, news):

@@ -57,7 +57,7 @@ def evaluate(impression_index, all_label_test, pred_label):
 
 
 def get_train_input(news_title, news_index, news_entity):
-    all_browsed_news, all_candidate, all_label = preprocess_user_data('../../data/MINDsmall_train/behaviors.tsv')
+    all_browsed_news, all_click, all_unclick, all_candidate, all_label = preprocess_user_data('../../data/MINDsmall_train/behaviors.tsv')
     
     all_browsed_title = np.zeros((len(all_browsed_news), Config.max_browsed, Config.max_title_len), dtype='int32')
     for i, user_browsed in enumerate(all_browsed_news):
@@ -75,8 +75,8 @@ def get_train_input(news_title, news_index, news_entity):
             j += 1
     all_browsed = np.concatenate((all_browsed_title, all_browsed_entity), axis=-1)
 
-    all_candidate_title = np.array([news_title[news_index[i[0]]] for i in all_candidate])
-    all_candidate_entity = np.array([news_entity[news_index[i[0]]] for i in all_candidate])
+    all_candidate_title = np.array([[ news_title[news_index[j]] for j in i] for i in all_candidate])
+    all_candidate_entity = np.array([[ news_entity[news_index[j]] for j in i] for i in all_candidate])
     all_candidate = np.concatenate((all_candidate_title, all_candidate_entity), axis=-1)
     all_label = np.array(all_label)
     return all_browsed, all_candidate, all_label
@@ -140,8 +140,9 @@ def train(model, train_iter, news_test, news_index_test):
             browsed, candidate, labels = data
             optimizer.zero_grad()
             output = model(browsed, candidate)
-            criteria = torch.nn.BCEWithLogitsLoss()
-            loss = criteria(output, labels.squeeze(dim=1).to(device))
+            # criteria = torch.nn.BCEWithLogitsLoss()
+            # loss = criteria(output, labels.squeeze(dim=1).to(device))
+            loss = torch.stack([x[0] for x in - F.log_softmax(output, dim=1)]).mean()
             loss_epoch.append(loss.item())
             loss.backward()
             optimizer.step()
@@ -176,7 +177,7 @@ def test(model, news_test, news_index_test):
     # print(all_candidate_news_test.shape)
 
     test_dataset = TestDataset(user_browsed_news_test, all_candidate_news_test)
-    test_dataloader = DataLoader(test_dataset, batch_size=Config.batch_size, shuffle=False, num_workers=Config.num_workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=Config.batch_size, shuffle=False, num_workers=0)
 
     print('test...')
     pred_label = []
